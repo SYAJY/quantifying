@@ -5,7 +5,6 @@ Data.
 """
 
 # Standard library
-import datetime as dt
 import os
 import sys
 import traceback
@@ -16,31 +15,57 @@ from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-CWD = os.path.dirname(os.path.abspath(__file__))
-dotenv_path = os.path.join(os.path.dirname(CWD), ".env")
-load_dotenv(dotenv_path)
+sys.path.append(".")
+# First-party/Local
+import quantify  # noqa: E402
 
-today = dt.datetime.today()
+# Setup paths, Date and LOGGER using quantify.setup()
+_, PATH_WORK_DIR, PATH_DOTENV, DATETIME_TODAY, LOGGER = quantify.setup(
+    __file__
+)
+
+# Load environment variables
+load_dotenv(PATH_DOTENV)
+
+# Get the YouTube API key
 API_KEY = os.getenv("YOUTUBE_API_KEY")
-DATA_WRITE_FILE = (
-    f"{CWD}" f"/data_youtube_{today.year}_{today.month}_{today.day}.csv"
+
+# Set up file path for CSV report
+DATA_WRITE_FILE = os.path.join(
+    PATH_WORK_DIR,
+    "data_youtube_"
+    f"{DATETIME_TODAY.year}_{DATETIME_TODAY.month}_{DATETIME_TODAY.day}.csv",
 )
-DATA_WRITE_FILE_TIME = (
-    f"{CWD}" f"/data_youtube_time_{today.year}_{today.month}_{today.day}.csv"
+DATA_WRITE_FILE_TIME = os.path.join(
+    PATH_WORK_DIR,
+    "data_youtube_time_"
+    f"{DATETIME_TODAY.year}_{DATETIME_TODAY.month}_{DATETIME_TODAY.day}.csv",
 )
+
+# Log the start of the script execution
+LOGGER.info("Script execution started.")
 
 
 def get_next_time_search_interval():
-    """Provides the next searching interval of time for Creative Commons
+    """
+    Provides the next searching interval of time for Creative Commons
     licensed video.
 
     Yields:
-        tuple: A tuple representing the time search interval currently dealt
-        via 2 RFC 3339 formatted date-time values (by YouTube API Standards),
-        and the current starting year and month of the interval.
+    - tuple: A tuple representing the time search interval currently dealt
+    via 2 RFC 3339 formatted date-time values (by YouTube API Standards),
+    and the current starting year and month of the interval.
     """
+    LOGGER.info(
+        "Providing the next searching interval "
+        "of time for Creative Commons licensed video."
+    )
+
     cur_year, cur_month = 2009, 1
-    while cur_year * 100 + cur_month <= today.year * 100 + today.month:
+    while (
+        cur_year * 100 + cur_month
+        <= DATETIME_TODAY.year * 100 + DATETIME_TODAY.month
+    ):
         end_month, end_day = 12, 31
         if cur_month == 1:
             end_month, end_day = 2, 28 + int(cur_year % 4 == 0)
@@ -66,18 +91,23 @@ def get_next_time_search_interval():
 
 
 def get_request_url(time=None):
-    """Provides the API Endpoint URL for specified parameter combinations.
+    """
+    Provides the API Endpoint URL for specified parameter combinations.
 
     Args:
-        time: A tuple indicating whether this query is related to video time
-        occurrence, and the time interval which it would like to investigate.
-        Defaults to None to indicate the query is not related to video time
-        occurrence.
+    - time: A tuple indicating whether this query is related to video time
+    occerrence, and the time interval which it would like to investigate.
+    Defaults to None to indicate the query is not related to video time
+    occurrence.
 
     Returns:
-        string: A string representing the API Endpoint URL for the query
-        specified by this function's parameters.
+    - string: A string representing the API Endpoint URL for the query
+    specified by this function's parameters.
     """
+    LOGGER.info(
+        "Providing the API Endpoint URL for specified parameter combinations."
+    )
+
     base_url = (
         r"https://youtube.googleapis.com/youtube/v3/search?part=snippet"
         r"&type=video&videoLicense=creativeCommon&"
@@ -92,18 +122,21 @@ def get_request_url(time=None):
 
 
 def get_response_elems(time=None):
-    """Provides the metadata for query of specified parameters
+    """
+    Provides the metadata for query of specified parameters
 
     Args:
-        time: A tuple indicating whether this query is related to video time
-        occurrence, and the time interval which it would like to investigate.
-        Defaults to None to indicate the query is not related to video time
-        occurrence.
+    - time: A tuple indicating whether this query is related to video time
+    occurrence, and the time interval which it would like to investigate.
+    Defaults to None to indicate the query is not related to video time
+    occurrence.
 
     Returns:
-        dict: A dictionary mapping metadata to its value provided from the API
-        query of specified parameters.
+    - dict: A dictionary mapping metadata to its value provided from the API
+    query of specified parameters.
     """
+    LOGGER.info("Provides the metadata for query of specified parameters.")
+
     search_data = None
     try:
         request_url = get_request_url(time=time)
@@ -114,20 +147,24 @@ def get_response_elems(time=None):
         )
         session = requests.Session()
         session.mount("https://", HTTPAdapter(max_retries=max_retries))
+        # Send GET request to YouTube API
         with session.get(request_url) as response:
             response.raise_for_status()
             search_data = response.json()
         return search_data
     except Exception as e:
         if "pageInfo" not in search_data:
-            print(f"search data is: \n{search_data}", file=sys.stderr)
+            LOGGER.error(f"Search data is: \n{search_data}")
             sys.exit(1)
         else:
+            LOGGER.error(f"Error occurred during request: {e}")
             raise e
 
 
 def set_up_data_file():
     """Writes the header row to file to contain YouTube data."""
+    LOGGER.info("Writing the header row to file to contain YouTube data.")
+
     with open(DATA_WRITE_FILE, "w") as f:
         f.write("LICENSE TYPE,Document Count\n")
     with open(DATA_WRITE_FILE_TIME, "w") as f:
@@ -138,6 +175,12 @@ def record_all_licenses():
     """Records the data of all license types findable in the license list and
     records these data into the DATA_WRITE_FILE as specified in that constant.
     """
+    LOGGER.info(
+        "Recording the data of all license types "
+        "findable in the license list "
+        "and records into DATA_WRITE_FILE"
+    )
+
     with open(DATA_WRITE_FILE, "a") as f:
         f.write(
             "licenses/by/3.0,"
@@ -149,6 +192,12 @@ def record_all_licenses_time():
     """Records the data of all license types findable in the license list and
     records these data into the DATA_WRITE_FILE as specified in that constant.
     """
+    LOGGER.info(
+        "Recording the data of all license types "
+        "findable in the license list and records "
+        "into DATA_WRITE_FILE, incorporating time"
+    )
+
     with open(DATA_WRITE_FILE_TIME, "a") as f:
         for time in get_next_time_search_interval():
             f.write(
@@ -169,11 +218,11 @@ if __name__ == "__main__":
     try:
         main()
     except SystemExit as e:
+        LOGGER.error(f"System exit with code: {e.code}")
         sys.exit(e.code)
     except KeyboardInterrupt:
-        print("INFO (130) Halted via KeyboardInterrupt.", file=sys.stderr)
+        LOGGER.info("(130) Halted via KeyboardInterrupt.")
         sys.exit(130)
     except Exception:
-        print("ERROR (1) Unhandled exception:", file=sys.stderr)
-        print(traceback.print_exc(), file=sys.stderr)
+        LOGGER.exception(f"(1) Unhandled exception: {traceback.format_exc()}")
         sys.exit(1)
