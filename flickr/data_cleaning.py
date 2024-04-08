@@ -19,41 +19,69 @@ import traceback
 # Third-party
 import pandas as pd
 
+sys.path.append(".")
+# First-party/Local
+import quantify  # noqa: E402
 
-def drop_empty_column(csv_path, new_csv_path):  # attribute is string
+# Setup only LOGGER using quantify.setup()
+_, _, _, _, LOGGER = quantify.setup(__file__)
+
+
+def drop_empty_column(csv_path, new_csv_path):
+    """
+    Drops columns with 'Unnamed' in the name from the CSV file.
+    Args:
+    - csv_path (str): Path to the original CSV file.
+    - new_csv_path (str): Path to save the cleaned CSV file.
+    """
+    LOGGER.info("Dropping 'Unnamed' columns from the CSV file.")
+
     df = pd.read_csv(csv_path)
-    for col in df.columns:  # to get the column list
+    for col in df.columns:
         if "Unnamed" in col:
             data = df.drop(col, axis=1)
-            print("Dropping column", col)
+            LOGGER.info(f"Dropping column {col}")
     data.to_csv(new_csv_path)
-    print("Dropping empty columns")
+    LOGGER.info("Dropping empty columns completed.")
 
 
-def drop_duplicate_id(csv_path, new_csv_path):  # attribute is string
+def drop_duplicate_id(csv_path, new_csv_path):
+    """
+    Drops duplicate rows based on the 'id' column from the CSV file.
+
+    Args:
+    - csv_path (str): Path to the original CSV file.
+    - new_csv_path (str): Path to save the cleaned CSV file.
+    """
+    LOGGER.info(
+        "Dropping duplicate rows based on the 'id' column from the CSV file."
+    )
+
     df = pd.read_csv(csv_path)
     data = df.drop_duplicates(subset=["id"])
     data.to_csv(new_csv_path)
-    print("Dropping duplicates")
+    LOGGER.info("Dropping duplicates completed.")
 
 
-def save_new_data(
-    csv_path, column_name_list, new_csv_path
-):  # attribute is string
+def save_new_data(csv_path, column_name_list, new_csv_path):
     """
-    column_name_list must belongs to the
-    existing column names from original csv
-    csv_path is the path of original csv
-    This function generate a new dataframe
-    to save final data with useful columns
+    Saves specified columns from the original CSV file to a new CSV file.
+
+    Args:
+    - csv_path (str): Path to the original CSV file.
+    - column_name_list (list of str): List of column names to be saved
+    (belongs to the existing column names from original csv)
+    - new_csv_path (str): Path to save the new CSV file.
     """
+    LOGGER.info("Saving columns from the original CSV to a new CSV.")
+
     df = pd.read_csv(csv_path)
     new_df = pd.DataFrame()
     for col in column_name_list:
         new_df[col] = list(df[col])
-        print("Saving column", col)
+        LOGGER.info(f"Saving column {col}")
     new_df.to_csv(new_csv_path)
-    print("Saving new data to new csv")
+    LOGGER.info("Saving new data to new csv")
 
 
 def main():
@@ -80,11 +108,11 @@ if __name__ == "__main__":
     try:
         main()
     except SystemExit as e:
+        LOGGER.error(f"System exit with code: {e.code}")
         sys.exit(e.code)
     except KeyboardInterrupt:
-        print("INFO (130) Halted via KeyboardInterrupt.", file=sys.stderr)
+        LOGGER.info("(130) Halted via KeyboardInterrupt.")
         sys.exit(130)
     except Exception:
-        print("ERROR (1) Unhandled exception:", file=sys.stderr)
-        print(traceback.print_exc(), file=sys.stderr)
-    sys.exit(1)
+        LOGGER.exception(f"(1) Unhandled exception: {traceback.format_exc()}")
+        sys.exit(1)
