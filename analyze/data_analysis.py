@@ -3,7 +3,7 @@ This file is the script of data analysis and visualization
 """
 
 # Standard library
-import os.path
+import os
 import re
 import sys
 import traceback
@@ -15,24 +15,34 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import seaborn as sns
-
-warnings.filterwarnings("ignore")
-# Third-party
 from wordcloud import STOPWORDS, WordCloud  # noqa: E402
 
-CWD = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(".")
+# First-party/Local
+import quantify  # noqa: E402
+
+# Warning suppression /!\ Caution /!\
+warnings.filterwarnings("ignore")
+
+# Setup PATH_WORK_DIR, and LOGGER using quantify.setup()
+_, PATH_WORK_DIR, _, _, LOGGER = quantify.setup(__file__)
 
 
 def tags_frequency(csv_path, column_names):
-    # attribute csv_path is string
-    # attribute column_names is a list
-    # i.e. column_names = ["tags", "description"]
     """
-    This function is to generate a word cloud
-    based on all the tags of each license
-    each license one cloud
+    Generate a word cloud based on all the tags of each license.
+    Each license has its own cloud.
+
+    Args:
+    - csv_path (str): Path to the CSV file containing data.
+    - column_names (list): List of column names to process.
+                           Example: ["tags", "description"]
+
     """
+    LOGGER.info("Generating word cloud based on tags.")
+
     df = pd.read_csv(csv_path)
+    # Process each column containing tags
     for column_name in column_names:
         list2 = []
         if column_name == "tags":
@@ -49,14 +59,14 @@ def tags_frequency(csv_path, column_names):
                     and str(row) != ""
                     and str(row) != "nan"
                 ):
-                    print(str(row))
+                    LOGGER.debug(f"Processing row: {row}")
                     if "ChineseinUS.org" in str(row):
                         row = "ChineseinUS"
                     list2 += re.split(r"\s|(?<!\d)[,.](?!\d)", str(row))
     text = ""
     stopwords = set(STOPWORDS)
 
-    # The stop words can be customized based on diff cases
+    # Customize stop words for the word cloud
     flickr_customized = {
         "nan",
         "https",
@@ -92,21 +102,18 @@ def tags_frequency(csv_path, column_names):
     # customized = {"p", "d", "b"}
     # stopwords = stopwords.union(customized)
 
-    for word in list_tags:
-        # Splitting each tag into its constituent words
-        tokens = word.split()
-        # Converting each word to lower case
-        for i in range(len(tokens)):
-            tokens[i] = tokens[i].lower()
-        # Adding each word to text
-        text += " ".join(tokens) + " "
-    for word in list2:
-        tokens = word.split()
-        for j in range(len(tokens)):
-            tokens[j] = tokens[j].lower()
-        text += " ".join(tokens) + " "
+    # Initialize an empty list to store lowercase words
+    lowercase_words = []
 
-    # Creating the word cloud
+    # Iterate over each tag in list_tags and list2
+    for tag in list_tags + list2:
+        # Split the tag into words, convert to lowercase,& append to the list.
+        lowercase_words.extend([word.lower() for word in tag.split()])
+
+    # Join the lowercase words with a space separator
+    text = " ".join(lowercase_words)
+
+    # Creating WordCloud
     tags_word_cloud = WordCloud(
         width=800,
         height=800,
@@ -115,7 +122,7 @@ def tags_frequency(csv_path, column_names):
         min_font_size=10,
     ).generate(text)
 
-    # Plotting the word cloud
+    # Plotting the WordCloud
     plt.figure(figsize=(8, 8), facecolor=None)
     plt.imshow(tags_word_cloud, interpolation="bilinear")
     plt.axis("off")
@@ -124,7 +131,7 @@ def tags_frequency(csv_path, column_names):
         fontweight="bold",
     )
     plt.savefig(
-        os.path.join(CWD, "wordCloud_plots/license1_wordCloud.png"),
+        os.path.join(PATH_WORK_DIR, "wordCloud_plots/license1_wordCloud.png"),
         dpi=300,
         bbox_inches="tight",
     )
@@ -132,12 +139,23 @@ def tags_frequency(csv_path, column_names):
 
 
 def time_trend_helper(df):
+    """
+    Extract year-wise count of entries from a DataFrame.
+
+    Args:
+    - df (DataFrame): Input DataFrame containing dates.
+
+    Returns:
+    - DataFrame: DataFrame with counts of entries per year.
+    """
+    LOGGER.info("Extracting year-wise count of entries.")
+
     year_list = []
     for date_row in df["dates"][0:]:
         date_list = str(date_row).split()
         year_list.append(date_list[0])
     df["Dates"] = year_list
-
+    # Count occurrences of each year
     # Use rename_axis for name of column from index and reset_index
     count_df = (
         df["Dates"]
@@ -146,11 +164,20 @@ def time_trend_helper(df):
         .rename_axis("Dates")
         .reset_index(name="Counts")
     )
+    # Remove first and last rows
     count_df = count_df.drop([0, len(count_df) - 1])
     return count_df
 
 
 def time_trend(csv_path):
+    """
+    Generate a line graph to show the time trend of the license usage.
+
+    Args:
+    - csv_path (str): Path to the CSV file.
+    """
+    LOGGER.info("Generating time trend line graph.")
+
     df = pd.read_csv(csv_path)
     count_df = time_trend_helper(df)
 
@@ -175,7 +202,7 @@ def time_trend(csv_path):
     plt.xlabel("Day", fontsize=10)
     plt.ylabel("Amount", fontsize=10)
     plt.savefig(
-        os.path.join(CWD, "line_graphs/license5_total_trend.png"),
+        os.path.join(PATH_WORK_DIR, "line_graphs/license5_total_trend.png"),
         dpi=300,
         bbox_inches="tight",
     )
@@ -184,10 +211,16 @@ def time_trend(csv_path):
 
 def time_trend_compile_helper(yearly_count):
     """
-    yearly_count is the dataframe with "year" and "Counts" as two columns
-    This function will return counts - the list of "Counts" with the
-    condition that their corresponding "year" is between [2000, 2022]
+    Filter yearly trend data for the years between 2018 and 2022.
+
+    Args:
+    - yearly_count (DataFrame): DataFrame with "year" and "Counts" columns.
+
+    Returns:
+    - DataFrame: Filtered yearly count data.
     """
+    LOGGER.info("Filtering yearly trend data.")
+
     Years = np.arange(2018, 2023)
     yearly_count["year"] = list(yearly_count.index)
     counts = []
@@ -196,7 +229,7 @@ def time_trend_compile_helper(yearly_count):
             int(yearly_count["year"][num]) >= 2018
         ):
             counts.append(yearly_count["Counts"][num])
-    print(counts)
+    LOGGER.info(f"{counts}")
     final_yearly_count = pd.DataFrame(
         list(zip(Years, counts)), columns=["Years", "Yearly_counts"]
     )
@@ -204,6 +237,11 @@ def time_trend_compile_helper(yearly_count):
 
 
 def time_trend_compile():
+    """
+    Compile yearly trends for different licenses and plot them.
+    """
+    LOGGER.info("Compiling yearly trends for different licenses.")
+
     license1 = pd.read_csv("../flickr/dataset/cleaned_license1.csv")
     license2 = pd.read_csv("../flickr/dataset/cleaned_license2.csv")
     license3 = pd.read_csv("../flickr/dataset/cleaned_license3.csv")
@@ -212,6 +250,7 @@ def time_trend_compile():
     license6 = pd.read_csv("../flickr/dataset/cleaned_license6.csv")
     license9 = pd.read_csv("../flickr/dataset/cleaned_license9.csv")
     license10 = pd.read_csv("../flickr/dataset/cleaned_license10.csv")
+    # Calculate yearly counts for each license
     count_df1 = time_trend_helper(license1)
     count_df2 = time_trend_helper(license2)
     count_df3 = time_trend_helper(license3)
@@ -243,7 +282,6 @@ def time_trend_compile():
         each_raw_data.dropna(how="all")
         list_data.append(each_raw_data)
 
-    # We set years are from 2000 to 2022
     yearly_count1 = list_data[0].to_frame()
     yearly_count2 = list_data[1].to_frame()
     yearly_count3 = list_data[2].to_frame()
@@ -252,6 +290,7 @@ def time_trend_compile():
     yearly_count6 = list_data[5].to_frame()
     yearly_count9 = list_data[6].to_frame()
     yearly_count10 = list_data[7].to_frame()
+    # Filter yearly count data for the years between 2018 and 2022
     yearly_count1 = time_trend_compile_helper(yearly_count1)
     yearly_count2 = time_trend_compile_helper(yearly_count2)
     yearly_count3 = time_trend_compile_helper(yearly_count3)
@@ -260,9 +299,9 @@ def time_trend_compile():
     yearly_count6 = time_trend_compile_helper(yearly_count6)
     yearly_count9 = time_trend_compile_helper(yearly_count9)
     yearly_count10 = time_trend_compile_helper(yearly_count10)
-    print(yearly_count1)
+    LOGGER.info(f"{yearly_count1}")
 
-    # plot lines
+    # Plot yearly trend for all licenses
     plt.plot(
         yearly_count1["Years"],
         yearly_count1["Yearly_counts"],
@@ -340,37 +379,55 @@ def time_trend_compile():
 
 
 def view_compare_helper(df):
+    """
+    Calculate maximum views of pictures under a license.
+
+    Args:
+    - df (DataFrame): Input DataFrame.
+
+    Returns:
+    - int: Maximum views.
+    """
+    LOGGER.info("Calculating maximum views of pictures under a license.")
+
     highest_view = int(max(df["views"]))
     df = df.sort_values("views", ascending=False)
+    LOGGER.info(f"DataFrame sorted by views in descending order: {df}")
+    LOGGER.info(f"Maximum views found: {highest_view}")
     return highest_view
-    print(df)
-    print(highest_view)
 
 
 def view_compare():
+    """
+    Compare maximum views of pictures under different licenses.
+    """
+    LOGGER.info(
+        "Comparing maximum views of pictures under different licenses."
+    )
+
     license1 = pd.read_csv(
-        os.path.join(CWD, "../flickr/dataset/cleaned_license1.csv")
+        os.path.join(PATH_WORK_DIR, "../flickr/dataset/cleaned_license1.csv")
     )
     license2 = pd.read_csv(
-        os.path.join(CWD, "../flickr/dataset/cleaned_license2.csv")
+        os.path.join(PATH_WORK_DIR, "../flickr/dataset/cleaned_license2.csv")
     )
     license3 = pd.read_csv(
-        os.path.join(CWD, "../flickr/dataset/cleaned_license3.csv")
+        os.path.join(PATH_WORK_DIR, "../flickr/dataset/cleaned_license3.csv")
     )
     license4 = pd.read_csv(
-        os.path.join(CWD, "../flickr/dataset/cleaned_license4.csv")
+        os.path.join(PATH_WORK_DIR, "../flickr/dataset/cleaned_license4.csv")
     )
     license5 = pd.read_csv(
-        os.path.join(CWD, "../flickr/dataset/cleaned_license5.csv")
+        os.path.join(PATH_WORK_DIR, "../flickr/dataset/cleaned_license5.csv")
     )
     license6 = pd.read_csv(
-        os.path.join(CWD, "../flickr/dataset/cleaned_license6.csv")
+        os.path.join(PATH_WORK_DIR, "../flickr/dataset/cleaned_license6.csv")
     )
     license9 = pd.read_csv(
-        os.path.join(CWD, "../flickr/dataset/cleaned_license9.csv")
+        os.path.join(PATH_WORK_DIR, "../flickr/dataset/cleaned_license9.csv")
     )
     license10 = pd.read_csv(
-        os.path.join(CWD, "../flickr/dataset/cleaned_license10.csv")
+        os.path.join(PATH_WORK_DIR, "../flickr/dataset/cleaned_license10.csv")
     )
     licenses = [
         license1,
@@ -382,10 +439,12 @@ def view_compare():
         license9,
         license10,
     ]
+    # Calculate maximum views for each license
     maxs = []
     for lic in licenses:
         maxs.append(view_compare_helper(lic))
-    print(maxs)
+    LOGGER.info(f"{maxs}")
+    # Create DataFrame to store license and their maximum views
     temp_data = pd.DataFrame()
     temp_data["Licenses"] = [
         "CC BY-NC-SA 2.0",
@@ -398,6 +457,7 @@ def view_compare():
         "Public Domain Mark 1.0",
     ]
     temp_data["views"] = maxs
+    # Plot bar graph
     fig, ax = plt.subplots(figsize=(13, 10))
     ax.grid(b=True, color="grey", linestyle="-.", linewidth=0.5, alpha=0.6)
     sns.set_style("dark")
@@ -428,7 +488,7 @@ def view_compare():
     current_values = plt.gca().get_yticks()
     plt.gca().set_yticklabels(["{:,.0f}".format(x) for x in current_values])
     plt.savefig(
-        os.path.join(CWD, "../analyze/compare_graphs/max_views.png"),
+        os.path.join(PATH_WORK_DIR, "../analyze/compare_graphs/max_views.png"),
         dpi=300,
         bbox_inches="tight",
     )
@@ -436,16 +496,27 @@ def view_compare():
 
 
 def total_usage():
-    # this will use the license total file as input dataset
-    df = pd.read_csv(os.path.join(CWD, "../flickr/dataset/license_total.csv"))
+    """
+    Generate a bar plot showing the total usage of different licenses.
+    """
+    LOGGER.info(
+        "Generating bar plot showing total usage of different licenses."
+    )
+
+    # Reads the license total file as the input dataset
+    df = pd.read_csv(
+        os.path.join(PATH_WORK_DIR, "../flickr/dataset/license_total.csv")
+    )
     df["License"] = [str(x) for x in list(df["License"])]
     fig = px.bar(df, x="License", y="Total amount", color="License")
-    fig.write_html(os.path.join(CWD, "../analyze/total_usage.html"))
+    fig.write_html(os.path.join(PATH_WORK_DIR, "../analyze/total_usage.html"))
     # fig.show()
 
 
 def main():
-    tags_frequency(os.path.join(CWD, "merged_all_cleaned.csv"), ["tags"])
+    tags_frequency(
+        os.path.join(PATH_WORK_DIR, "merged_all_cleaned.csv"), ["tags"]
+    )
     # df = pd.read_csv("../flickr/dataset/cleaned_license10.csv")
     # print(df.shape)
 
@@ -454,11 +525,11 @@ if __name__ == "__main__":
     try:
         main()
     except SystemExit as e:
+        LOGGER.error(f"System exit with code: {e.code}")
         sys.exit(e.code)
     except KeyboardInterrupt:
-        print("INFO (130) Halted via KeyboardInterrupt.", file=sys.stderr)
+        LOGGER.info("(130) Halted via KeyboardInterrupt.")
         sys.exit(130)
     except Exception:
-        print("ERROR (1) Unhandled exception:", file=sys.stderr)
-        print(traceback.print_exc(), file=sys.stderr)
-    sys.exit(1)
+        LOGGER.exception(f"(1) Unhandled exception: {traceback.format_exc()}")
+        sys.exit(1)
