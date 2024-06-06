@@ -5,16 +5,15 @@ Example Command from root of repository:
 """
 
 # Standard library
-import os
 import sys
 import traceback
 from pprint import pprint
 
 # Third-party
+import query_secrets
 import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
-import query_secrets
 
 TIMEOUT = 10
 
@@ -32,7 +31,7 @@ def fetch_data(session):
 
 
 def main():
-    #print("API_KEY:", query_secrets.S_I_O_A_API_Key)  # DEBUG
+    # print("API_KEY:", query_secrets.S_I_O_A_API_Key)  # DEBUG
 
     # Requests configurations
     max_retries = Retry(
@@ -52,7 +51,6 @@ def main():
     pprint(data)
 
 
-
 if __name__ == "__main__":
     try:
         main()
@@ -66,4 +64,4 @@ if __name__ == "__main__":
         print(traceback.print_exc(), file=sys.stderr)
         sys.exit(1)
 
-# the difference between a record and an object. 
+# the difference between a record and an object.
